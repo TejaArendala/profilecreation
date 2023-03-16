@@ -1,0 +1,152 @@
+models/candidate.js
+
+javascript
+Copy code
+const mongoose = require('mongoose');
+
+const candidateSchema = new mongoose.Schema({
+  firstName: { type: String, required: true },
+  middleName: { type: String },
+  lastName: { type: String, required: true },
+  email: { type: String, required: true },
+  phone: { type: String, required: true },
+  role: { type: String, required: true },
+  resumeSource: { type: String, required: true },
+  recruiterName: { type: String, required: true },
+  formToEmail: { type: String, required: true },
+}, { timestamps: true });
+
+const Candidate = mongoose.model('Candidate', candidateSchema);
+
+module.exports = Candidate;
+
+-------------------------------------
+models/auditLog.js
+
+javascript
+Copy code
+const mongoose = require('mongoose');
+
+const auditLogSchema = new mongoose.Schema({
+  collectionName: { type: String, required: true },
+  operationType: { type: String, required: true },
+  documentId: { type: mongoose.Schema.Types.ObjectId, required: true },
+  documentData: { type: mongoose.Schema.Types.Mixed },
+}, { timestamps: true });
+
+const AuditLog = mongoose.model('AuditLog', auditLogSchema);
+
+module.exports = AuditLog;
+
+---------------
+controllers/candidates.js
+============================
+javascript
+Copy code
+const Candidate = require('../models/candidate');
+const AuditLog = require('../models/auditLog');
+
+exports.getAllCandidates = async (req, res) => {
+  try {
+    const candidates = await Candidate.find();
+    res.json({ success: true, data: candidates });
+  } catch (err) {
+    console.log(err);
+    res.json({ success: false, message: 'Failed to get candidates' });
+  }
+};
+
+exports.createCandidate = async (req, res) => {
+  try {
+    const candidate = new Candidate(req.body);
+    await candidate.save();
+    
+    // Log the candidate creation to the audit log
+    const auditLog = new AuditLog({
+      collectionName: 'Candidate',
+      operationType: 'create',
+      documentId: candidate._id,
+      documentData: candidate.toObject(),
+    });
+    await auditLog.save();
+    
+    res.json({ success: true, message: 'Candidate added successfully' });
+  } catch (err) {
+    console.log(err);
+    res.json({ success: false, message: 'Failed to add candidate' });
+  }
+};
+
+exports.updateCandidate = async (req, res) => {
+  try {
+    const candidate = await Candidate.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    
+    // Log the candidate update to the audit log
+    const auditLog = new AuditLog({
+      collectionName: 'Candidate',
+      operationType: 'update',
+      documentId: candidate._id,
+      documentData: candidate.toObject(),
+    });
+    await auditLog.save();
+    
+    res.json({ success: true, message: 'Candidate updated successfully', data: candidate });
+  } catch (err) {
+    console.log(err);
+    res.json({ success: false, message: 'Failed to update candidate' });
+  }
+};
+
+exports.deleteCandidate = async (req, res) => {
+  try {
+    const candidate = await Candidate.findById(req.params.id);
+    await candidate.remove();
+
+    // Log the candidate deletion to the audit log
+    const auditLog = new AuditLog({
+      collectionName: 'Candidate',
+      operationType: 'delete',
+      documentId: candidate._id,
+      documentData: candidate.toObject(),
+    });
+    await auditLog.save();
+
+    res.json({ success: true, message: 'Candidatedeleted successfully' });
+} catch (err) {
+console.log(err);
+res.json({ success: false, message: 'Failed to delete candidate' });
+}
+};
+
+exports.getCandidateById = async (req, res) => {
+try {
+const candidate = await Candidate.findById(req.params.id);
+res.json({ success: true, data: candidate });
+} catch (err) {
+console.log(err);
+res.json({ success: false, message: 'Failed to get candidate' });
+}
+};
+
+----------------------------
+const express = require('express');
+const router = express.Router();
+const candidateController = require('../controllers/candidateController');
+
+// GET all candidates
+router.get('/candidates', candidateController.getAllCandidates);
+
+// POST create a new candidate
+router.post('/candidates', candidateController.createCandidate);
+
+// PUT update an existing candidate
+router.put('/candidates/:id', candidateController.updateCandidate);
+
+// DELETE delete an existing candidate
+router.delete('/candidates/:id', candidateController.deleteCandidate);
+
+module.exports = router;
